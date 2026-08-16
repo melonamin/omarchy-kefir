@@ -120,8 +120,19 @@ Panel {
       volume = state.volume
     if (volume > 0) lastAudibleVolume = volume
     mutedFlag = state.muted
-    source = state.source
-    status = state.status
+    // Power-on takes the speaker a couple of seconds, during which it still
+    // reports standby; syncing then would snap the toggle back before it
+    // flips on again. Hold the optimistic power/source until the speaker
+    // confirms it (or the settle window runs out).
+    if (powerSettleTimer.running
+        && state.status === status
+        && (source === "" || state.source === source)) {
+      powerSettleTimer.stop()
+    }
+    if (!powerSettleTimer.running) {
+      source = state.source
+      status = state.status
+    }
     playbackState = state.playbackState
     trackTitle = state.trackTitle
     trackArtist = state.trackArtist
@@ -176,6 +187,7 @@ Panel {
     if (!reachable) return
     source = key
     status = "powerOn"  // selecting a source wakes the speaker
+    powerSettleTimer.restart()
     sendSet("settings:/kef/play/physicalSource", "value", Model.sourcePayload(key))
     quickPollTimer.restart()
   }
@@ -183,6 +195,7 @@ Panel {
   function setPower(on) {
     if (!reachable) return
     status = on ? "powerOn" : "standby"
+    powerSettleTimer.restart()
     sendSet("settings:/kef/play/physicalSource", "value", Model.sourcePayload(on ? "powerOn" : "standby"))
     quickPollTimer.restart()
   }
@@ -247,6 +260,13 @@ Panel {
   Timer {
     id: volumeSettleTimer
     interval: 1500
+  }
+
+  // Long enough to outlast the speaker's 1-2s power transition plus one
+  // poll round-trip; a confirming poll releases it early.
+  Timer {
+    id: powerSettleTimer
+    interval: 5000
   }
 
   // Advance the progress bar between polls; only worth the wakeups while the

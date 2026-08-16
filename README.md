@@ -1,4 +1,4 @@
-# KEF Speakers — Omarchy bar widget
+# Kefir for Omarchy
 
 Control KEF wireless speakers (LSX II, LS50 Wireless II, LS60) from the
 Omarchy bar. Talks directly to the speaker's KEF Connect HTTP API on the
@@ -24,9 +24,8 @@ local network — no daemon, no CLI dependency. Same protocol as
 ## Install
 
 ```bash
-# Already on this machine under ~/.config/omarchy/plugins/melonamin.kef
-omarchy plugin enable melonamin.kef
-omarchy bar set melonamin.kef host <speaker-ip>
+omarchy plugin add https://github.com/melonamin/omarchy-kefir.git --enable
+omarchy bar set melonamin.kefir host <speaker-ip>
 ```
 
 Find the speaker's IP in the KEF Connect app, your router, or via
@@ -37,11 +36,11 @@ Find the speaker's IP in the KEF Connect app, your router, or via
 For Hyprland keybindings:
 
 ```bash
-omarchy-shell melonamin.kef toggle      # open/close the panel
-omarchy-shell melonamin.kef volumeUp    # +5
-omarchy-shell melonamin.kef volumeDown  # -5
-omarchy-shell melonamin.kef mute
-omarchy-shell melonamin.kef playPause
+omarchy-shell melonamin.kefir toggle      # open/close the panel
+omarchy-shell melonamin.kefir volumeUp    # +5
+omarchy-shell melonamin.kefir volumeDown  # -5
+omarchy-shell melonamin.kefir mute
+omarchy-shell melonamin.kefir playPause
 ```
 
 ## Notes

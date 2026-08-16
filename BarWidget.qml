@@ -4,7 +4,7 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "melonamin.kef"
+  moduleName: "melonamin.kefir"
 
   // Carry sub-notch touchpad deltas between wheel events.
   property real wheelAccumulator: 0

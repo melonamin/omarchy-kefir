@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "melonamin.kef",
-  "name": "KEF Speakers",
+  "id": "melonamin.kefir",
+  "name": "Kefir",
   "version": "1.0.0",
   "author": "melonamin",
   "description": "Control KEF wireless speakers: power, volume, source, and playback",
@@ -12,7 +12,7 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "KEF Speakers",
+    "displayName": "Kefir",
     "description": "Power, volume, source, and playback controls for KEF wireless speakers",
     "category": "Audio",
     "allowMultiple": false,

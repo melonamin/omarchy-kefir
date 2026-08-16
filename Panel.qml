@@ -7,8 +7,8 @@ import "Model.js" as Model
 
 Panel {
   id: root
-  moduleName: "melonamin.kef"
-  ipcTarget: "melonamin.kef"
+  moduleName: "melonamin.kefir"
+  ipcTarget: "melonamin.kefir"
   manageIpc: false
 
   property var anchorItem: null
@@ -368,7 +368,7 @@ Panel {
         Text {
           visible: !root.configured
           width: parent.width
-          text: "Set the speaker IP to get started:\n\nomarchy bar set melonamin.kef host <ip>"
+          text: "Set the speaker IP to get started:\n\nomarchy bar set melonamin.kefir host <ip>"
           color: Qt.darker(root.bar.foreground, 1.2)
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.body

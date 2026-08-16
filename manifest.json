@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "melonamin.kef",
+  "name": "KEF Speakers",
+  "version": "1.0.0",
+  "author": "melonamin",
+  "description": "Control KEF wireless speakers: power, volume, source, and playback",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "KEF Speakers",
+    "description": "Power, volume, source, and playback controls for KEF wireless speakers",
+    "category": "Audio",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "host": ""
+    },
+    "schema": [
+      { "key": "host", "type": "string", "label": "Speaker IP address" }
+    ]
+  }
+}

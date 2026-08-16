@@ -9,6 +9,7 @@ const STANDBY_POLL = [
   '[{"kefSpeakerStatus":"standby","type":"kefSpeakerStatus"}]',
   '[{"bool_":false,"type":"bool_"}]',
   '[{"state":"stopped","error":"","streamerError":{},"trackRoles":{},"playId":{"timestamp":6656748814,"systemMemberId":"kef_one-4310ba21-e3d6-4669-b25f-d5cea70e3aac"},"keepActive":false,"mediaRoles":{}}]',
+  '[{"type":"i64_","i64_":-1}]',
   '[{"type":"string_","string_":"LS50 Wireless II"}]'
 ].join("\n") + "\n"
 
@@ -19,7 +20,20 @@ const PLAYING_POLL = [
   '[{"kefPhysicalSource":"wifi","type":"kefPhysicalSource"}]',
   '[{"kefSpeakerStatus":"powerOn","type":"kefSpeakerStatus"}]',
   '[{"bool_":false,"type":"bool_"}]',
-  '[{"state":"playing","trackRoles":{"title":"Take Five","icon":"http://x/cover.jpg","mediaData":{"metaData":{"artist":"Dave Brubeck","album":"Time Out"}}},"status":{"duration":324000}}]',
+  '[{"state":"playing","controls":{"previous":true,"pause":true,"next_":true},"trackRoles":{"title":"Take Five","icon":"http://x/cover.jpg","mediaData":{"metaData":{"artist":"Dave Brubeck","album":"Time Out"}}},"status":{"duration":324000}}]',
+  '[{"type":"i64_","i64_":123000}]',
+  '[{"type":"string_","string_":"LS50 Wireless II"}]'
+].join("\n") + "\n"
+
+// Captured verbatim while playing coaxial passthrough: the pseudo-track's
+// title is the service id and every transport control is off.
+const COAX_POLL = [
+  '[{"type":"i32_","i32_":60}]',
+  '[{"kefPhysicalSource":"coaxial","type":"kefPhysicalSource"}]',
+  '[{"kefSpeakerStatus":"powerOn","type":"kefSpeakerStatus"}]',
+  '[{"bool_":false,"type":"bool_"}]',
+  '[{"state":"playing","error":"","trackRoles":{"audioType":"audioBroadcast","mediaData":{"metaData":{"serviceID":"COAX","playLogicPath":"kef:/playlogic"}},"type":"audio","title":"COAX","path":"kef:/playlogic/COAX"},"playId":{"timestamp":7026867417,"systemMemberId":"kef_one-4310ba21-e3d6-4669-b25f-d5cea70e3aac"},"controls":{"previous":false,"pause":false,"next_":false},"mediaRoles":{"audioType":"audioBroadcast","mediaData":{"metaData":{"serviceID":"COAX","playLogicPath":"kef:/playlogic"}},"type":"audio","title":"COAX","path":"kef:/playlogic/COAX"}}]',
+  '[{"type":"i64_","i64_":-1}]',
   '[{"type":"string_","string_":"LS50 Wireless II"}]'
 ].join("\n") + "\n"
 
@@ -32,6 +46,10 @@ test("parsePoll: standby snapshot", () => {
   assert.strictEqual(s.muted, false)
   assert.strictEqual(s.playbackState, "stopped")
   assert.strictEqual(s.trackTitle, "")
+  assert.strictEqual(s.coverUrl, "")
+  assert.strictEqual(s.canPause, false)
+  assert.strictEqual(s.positionMs, -1)
+  assert.strictEqual(s.durationMs, 0)
   assert.strictEqual(s.deviceName, "LS50 Wireless II")
 })
 
@@ -45,6 +63,44 @@ test("parsePoll: playing snapshot", () => {
   assert.strictEqual(s.trackTitle, "Take Five")
   assert.strictEqual(s.trackArtist, "Dave Brubeck")
   assert.strictEqual(s.trackAlbum, "Time Out")
+  assert.strictEqual(s.coverUrl, "http://x/cover.jpg")
+  assert.strictEqual(s.canPrevious, true)
+  assert.strictEqual(s.canPause, true)
+  assert.strictEqual(s.canNext, true)
+  assert.strictEqual(s.positionMs, 123000)
+  assert.strictEqual(s.durationMs, 324000)
+})
+
+test("parsePoll: coaxial passthrough is not a track and has no transports", () => {
+  const s = Model.parsePoll(COAX_POLL)
+  assert.ok(s)
+  assert.strictEqual(s.source, "coaxial")
+  assert.strictEqual(s.playbackState, "playing")
+  assert.strictEqual(s.trackTitle, "")   // "COAX" service pseudo-track filtered out
+  assert.strictEqual(s.coverUrl, "")
+  assert.strictEqual(s.canPrevious, false)
+  assert.strictEqual(s.canPause, false)
+  assert.strictEqual(s.canNext, false)
+  assert.strictEqual(s.positionMs, -1)
+  assert.strictEqual(s.durationMs, 0)
+})
+
+test("parsePoll: missing controls object falls back to streaming sources", () => {
+  const noControls = PLAYING_POLL.replace('"controls":{"previous":true,"pause":true,"next_":true},', "")
+  const wifi = Model.parsePoll(noControls)
+  assert.strictEqual(wifi.canPause, true)
+
+  const tv = Model.parsePoll(noControls.replace('"kefPhysicalSource":"wifi"', '"kefPhysicalSource":"tv"'))
+  assert.strictEqual(tv.canPause, false)
+})
+
+test("formatTime", () => {
+  assert.strictEqual(Model.formatTime(0), "0:00")
+  assert.strictEqual(Model.formatTime(59000), "0:59")
+  assert.strictEqual(Model.formatTime(123000), "2:03")
+  assert.strictEqual(Model.formatTime(3723000), "1:02:03")
+  assert.strictEqual(Model.formatTime(-1), "")
+  assert.strictEqual(Model.formatTime("junk"), "")
 })
 
 test("parsePoll: rejects incomplete and malformed responses", () => {

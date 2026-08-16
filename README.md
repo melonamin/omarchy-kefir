@@ -11,7 +11,12 @@ local network — no daemon, no CLI dependency. Same protocol as
 
 - Bar pill showing speaker state (off/standby, on, muted), with tooltip
 - Popup panel: power switch, volume slider with mute, input source picker,
-  now-playing with play/pause/next/previous for Wi-Fi and Bluetooth sources
+  and a now-playing card with album art, track/artist/album, a progress bar,
+  and play/pause/next/previous
+- Transport buttons follow the speaker's own `controls` capability report,
+  so they enable only on sources that support them (streaming, not
+  passthrough); passthrough pseudo-tracks ("COAX", "OPT", ...) are filtered
+  out of the card
 - Scroll the bar icon to change volume (with OSD), right-click to mute,
   middle-click to play/pause
 - Panel keys: `h`/`l` volume, `m` mute, `Enter`/`Space` play/pause, `Esc` close

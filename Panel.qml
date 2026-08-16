@@ -31,8 +31,28 @@ Panel {
   property string playbackState: ""
   property string trackTitle: ""
   property string trackArtist: ""
+  property string trackAlbum: ""
+  property string coverUrl: ""
+  property bool canPrevious: false
+  property bool canPause: false
+  property bool canNext: false
+  property real durationMs: 0
+
+  // Song position is polled, then advanced locally between polls while
+  // playing so the progress bar moves smoothly.
+  property real polledPositionMs: -1
+  property real polledAtWallMs: 0
+  property real nowMs: 0
+  readonly property real positionMs: {
+    if (polledPositionMs < 0) return -1
+    var advanced = polledPositionMs + (playbackState === "playing" ? Math.max(0, nowMs - polledAtWallMs) : 0)
+    return durationMs > 0 ? Math.min(durationMs, advanced) : advanced
+  }
+  readonly property bool hasProgress: durationMs > 0 && positionMs >= 0
 
   readonly property bool powered: status === "powerOn"
+  readonly property bool hasMedia: powered
+    && (trackTitle !== "" || coverUrl !== "" || canPause || canPrevious || canNext)
   readonly property bool muted: mutedFlag || (reachable && powered && volume === 0)
   // Restored on unmute; mute-by-zero-volume is how Kefir/SwiftKEF mute too.
   property int lastAudibleVolume: 20
@@ -105,6 +125,15 @@ Panel {
     playbackState = state.playbackState
     trackTitle = state.trackTitle
     trackArtist = state.trackArtist
+    trackAlbum = state.trackAlbum
+    coverUrl = state.coverUrl
+    canPrevious = state.canPrevious
+    canPause = state.canPause
+    canNext = state.canNext
+    durationMs = state.durationMs
+    polledPositionMs = state.positionMs
+    polledAtWallMs = Date.now()
+    nowMs = polledAtWallMs
     if (state.deviceName !== "") deviceName = state.deviceName
   }
 
@@ -165,7 +194,7 @@ Panel {
   }
 
   function playPause() {
-    transport("pause")
+    if (canPause) transport("pause")
   }
 
   function showVolumeOsd() {
@@ -218,6 +247,15 @@ Panel {
   Timer {
     id: volumeSettleTimer
     interval: 1500
+  }
+
+  // Advance the progress bar between polls; only worth the wakeups while the
+  // panel is actually showing a moving track.
+  Timer {
+    interval: 1000
+    running: root.opened && root.playbackState === "playing" && root.hasProgress
+    repeat: true
+    onTriggered: root.nowMs = Date.now()
   }
 
   IpcHandler {
@@ -469,14 +507,14 @@ Panel {
 
         // ---- Now playing ----
         PanelSeparator {
-          visible: root.configured && root.powered && Model.supportsPlayback(root.source)
+          visible: root.configured && root.hasMedia
           foreground: root.bar.foreground
         }
 
         Column {
-          visible: root.configured && root.powered && Model.supportsPlayback(root.source)
+          visible: root.configured && root.hasMedia
           width: parent.width
-          spacing: Style.space(8)
+          spacing: Style.space(10)
 
           PanelSectionHeader {
             text: "NOW PLAYING"
@@ -484,52 +522,148 @@ Panel {
             fontFamily: root.bar.fontFamily
           }
 
-          Text {
-            visible: root.trackTitle !== ""
+          Row {
             width: parent.width
-            text: root.trackTitle
-            color: root.bar.foreground
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.body
-            font.bold: true
-            elide: Text.ElideRight
+            spacing: Style.space(10)
+
+            BorderSurface {
+              width: Style.space(64)
+              height: Style.space(64)
+              radius: Style.spacing.labelGap
+              color: Style.normalFillFor(root.bar.foreground, Color.accent)
+              borderSpec: Border.controlSpec("normal", root.bar.foreground, Color.accent)
+
+              Image {
+                anchors.fill: parent
+                anchors.margins: Style.space(2)
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                source: root.coverUrl
+                visible: root.coverUrl !== "" && status !== Image.Error
+              }
+
+              Text {
+                anchors.centerIn: parent
+                visible: root.coverUrl === ""
+                text: "󰝚"
+                color: root.bar.foreground
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.displayLarge
+              }
+            }
+
+            Column {
+              spacing: Style.space(4)
+              width: parent.width - Style.space(74)
+              anchors.verticalCenter: parent.verticalCenter
+
+              Text {
+                text: root.trackTitle || "Nothing playing"
+                color: root.bar.foreground
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.subtitle
+                font.bold: true
+                elide: Text.ElideRight
+                width: parent.width
+              }
+
+              Text {
+                text: root.trackArtist
+                color: Qt.darker(root.bar.foreground, 1.3)
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                elide: Text.ElideRight
+                width: parent.width
+                visible: text !== ""
+              }
+
+              Text {
+                text: root.trackAlbum
+                color: Qt.darker(root.bar.foreground, 1.6)
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.caption
+                elide: Text.ElideRight
+                width: parent.width
+                visible: text !== ""
+              }
+            }
           }
 
-          Text {
-            visible: root.trackArtist !== ""
+          Column {
+            visible: root.hasProgress
             width: parent.width
-            text: root.trackArtist
-            color: Qt.darker(root.bar.foreground, 1.3)
-            font.family: root.bar.fontFamily
-            font.pixelSize: Style.font.caption
-            elide: Text.ElideRight
+            spacing: Style.space(4)
+
+            Rectangle {
+              width: parent.width
+              height: Math.max(4, Math.round(Style.spacing.controlHeight * 0.11))
+              radius: height / 2
+              color: Style.selectedFillFor(root.bar.foreground, Color.accent)
+
+              Rectangle {
+                height: parent.height
+                radius: parent.radius
+                color: root.bar.foreground
+                width: parent.width * (root.durationMs > 0
+                  ? Math.max(0, Math.min(1, root.positionMs / root.durationMs)) : 0)
+              }
+            }
+
+            Item {
+              width: parent.width
+              implicitHeight: elapsedLabel.implicitHeight
+
+              Text {
+                id: elapsedLabel
+                text: Model.formatTime(root.positionMs)
+                color: Qt.darker(root.bar.foreground, 1.4)
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.caption
+                anchors.left: parent.left
+              }
+
+              Text {
+                text: Model.formatTime(root.durationMs)
+                color: Qt.darker(root.bar.foreground, 1.4)
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.caption
+                anchors.right: parent.right
+              }
+            }
           }
 
           Row {
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: Style.space(16)
+            spacing: Style.space(6)
 
-            PanelActionButton {
+            Button {
               iconText: "󰒮"
-              tooltipText: "Previous"
               foreground: root.bar.foreground
-              fontFamily: root.bar.fontFamily
+              horizontalPadding: Style.spacing.controlPaddingX
+              verticalPadding: Style.spacing.controlPaddingY
+              enabled: root.canPrevious
+              opacity: enabled ? 1.0 : 0.4
               onClicked: root.transport("previous")
             }
 
-            PanelActionButton {
+            Button {
               iconText: root.playbackState === "playing" ? "󰏤" : "󰐊"
-              tooltipText: root.playbackState === "playing" ? "Pause" : "Play"
               foreground: root.bar.foreground
-              fontFamily: root.bar.fontFamily
+              horizontalPadding: Style.spacing.panelGap
+              verticalPadding: Style.spacing.controlPaddingY
+              iconSize: Style.font.iconLarge
+              enabled: root.canPause
+              opacity: enabled ? 1.0 : 0.4
               onClicked: root.playPause()
             }
 
-            PanelActionButton {
+            Button {
               iconText: "󰒭"
-              tooltipText: "Next"
               foreground: root.bar.foreground
-              fontFamily: root.bar.fontFamily
+              horizontalPadding: Style.spacing.controlPaddingX
+              verticalPadding: Style.spacing.controlPaddingY
+              enabled: root.canNext
+              opacity: enabled ? 1.0 : 0.4
               onClicked: root.transport("next")
             }
           }

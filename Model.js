@@ -13,6 +13,7 @@ var POLL_PATHS = [
   "settings:/kef/host/speakerStatus",
   "settings:/mediaPlayer/mute",
   "player:player/data",
+  "player:player/data/playTime",
   "settings:/deviceName"
 ]
 
@@ -107,6 +108,21 @@ function parsePoll(raw) {
   var mediaData = trackRoles.mediaData || {}
   var metaData = mediaData.metaData || {}
   var source = String(items[1].kefPhysicalSource || "")
+  var title = String(trackRoles.title || "")
+
+  // Passthrough inputs report a pseudo-track whose title is the service id
+  // ("COAX", "OPT", ...) with audioType "audioBroadcast"; that is not a track.
+  var serviceId = String(metaData.serviceID || "")
+  var isRealTrack = title !== "" &&
+    !(trackRoles.audioType === "audioBroadcast" && serviceId !== "" && title === serviceId)
+
+  // Which transport actions the current source accepts. Older firmware omits
+  // the controls object; fall back to "streaming sources can transport".
+  var controls = player.controls
+  var fallback = supportsPlayback(source)
+  var position = typeof items[5].i64_ === "number" ? items[5].i64_ : -1
+  var duration = player.status && typeof player.status.duration === "number"
+    ? player.status.duration : 0
 
   return {
     volume: typeof items[0].i32_ === "number" ? items[0].i32_ : null,
@@ -116,11 +132,29 @@ function parsePoll(raw) {
     status: String(items[2].kefSpeakerStatus || ""),
     muted: items[3].bool_ === true,
     playbackState: String(player.state || ""),
-    trackTitle: String(trackRoles.title || ""),
+    trackTitle: isRealTrack ? title : "",
     trackArtist: String(metaData.artist || ""),
     trackAlbum: String(metaData.album || ""),
-    deviceName: String(items[5].string_ || "")
+    coverUrl: isRealTrack ? String(trackRoles.icon || "") : "",
+    canPrevious: controls ? controls.previous === true : fallback,
+    canPause: controls ? controls.pause === true : fallback,
+    canNext: controls ? controls.next_ === true : fallback,
+    positionMs: position >= 0 ? position : -1,
+    durationMs: duration > 0 ? duration : 0,
+    deviceName: String(items[6].string_ || "")
   }
+}
+
+// Milliseconds -> "m:ss" (or "h:mm:ss" past the hour).
+function formatTime(ms) {
+  var total = Math.floor(parseFloat(String(ms)) / 1000)
+  if (isNaN(total) || total < 0) return ""
+  var s = total % 60
+  var m = Math.floor(total / 60) % 60
+  var h = Math.floor(total / 3600)
+  var mm = h > 0 && m < 10 ? "0" + m : String(m)
+  var ss = s < 10 ? "0" + s : String(s)
+  return (h > 0 ? h + ":" : "") + mm + ":" + ss
 }
 
 function speakerIcon(configured, reachable, powered, muted) {
@@ -157,6 +191,7 @@ if (typeof module !== "undefined") {
     sourcePayload: sourcePayload,
     controlPayload: controlPayload,
     parsePoll: parsePoll,
+    formatTime: formatTime,
     speakerIcon: speakerIcon,
     statusLine: statusLine,
     tooltip: tooltip

@@ -184,6 +184,53 @@ test("bar icon and status line", () => {
   assert.strictEqual(Model.statusLine(true, true, true, "", ""), "On")
 })
 
+// Captured verbatim from `avahi-browse -rpt _airplay._tcp` on a network with
+// a KEF LS50 Wireless II (v4 + v6 rows) and non-KEF AirPlay devices.
+const AVAHI_OUTPUT = [
+  '+;enp95s0;IPv4;LS50\\032Wireless\\032II;AirPlay Remote Video;local',
+  '=;enp95s0;IPv6;LS50\\032Wireless\\032II;AirPlay Remote Video;local;kef_one-841715171e27.local;10.10.10.30;7000;"acl=0" "deviceid=84:17:15:17:1E:27" "model=LS50 Wireless II" "manufacturer=KEF" "serialNumber=24c0201d-0dcb-4d3d-a14e-c96ea3bc3480" "pk=69bfb4ee548aeb2b29c8cc39f49f93afa45a20c4afb05f55111ae0b7a67046d6"',
+  '=;enp95s0;IPv4;LS50\\032Wireless\\032II;AirPlay Remote Video;local;kef_one-841715171e27.local;10.10.10.30;7000;"acl=0" "deviceid=84:17:15:17:1E:27" "model=LS50 Wireless II" "manufacturer=KEF" "serialNumber=24c0201d-0dcb-4d3d-a14e-c96ea3bc3480" "pk=69bfb4ee548aeb2b29c8cc39f49f93afa45a20c4afb05f55111ae0b7a67046d6"',
+  '=;enp95s0;IPv6;Dining;AirPlay Remote Video;local;Dining.local;10.10.30.21;7000;"acl=0" "deviceid=C2:F5:35:96:21:2E" "model=WiiM Amp" "manufacturer=Linkplay Technology Inc." "serialNumber=FF98F3593CE486C66511BE0A"',
+  '=;enp95s0;IPv4;callisto;AirPlay Remote Video;local;callisto.local;10.10.10.68;7000;"act=2" "acl=0" "model=Mac16,12" "srcvers=980.77.5"'
+].join("\n") + "\n"
+
+test("parseDiscovery: finds KEF devices only, prefers IPv4, dedupes", () => {
+  const found = Model.parseDiscovery(AVAHI_OUTPUT)
+  assert.strictEqual(found.length, 1)
+  assert.deepStrictEqual(found[0], {
+    name: "LS50 Wireless II",
+    model: "LS50 Wireless II",
+    address: "10.10.10.30",
+    hostname: "kef_one-841715171e27.local"
+  })
+})
+
+test("parseDiscovery: keeps IPv6-only KEF hosts as fallback", () => {
+  const v6only = AVAHI_OUTPUT.split("\n")
+    .filter(l => !(l.startsWith("=;enp95s0;IPv4;LS50"))).join("\n")
+  const found = Model.parseDiscovery(v6only)
+  assert.strictEqual(found.length, 1)
+  assert.strictEqual(found[0].address, "10.10.10.30")
+})
+
+test("parseDiscovery: empty and garbage input", () => {
+  assert.deepStrictEqual(Model.parseDiscovery(""), [])
+  assert.deepStrictEqual(Model.parseDiscovery(null), [])
+  assert.deepStrictEqual(Model.parseDiscovery("browse failure\n=;short"), [])
+})
+
+test("unescapeAvahi", () => {
+  assert.strictEqual(Model.unescapeAvahi("LS50\\032Wireless\\032II"), "LS50 Wireless II")
+  assert.strictEqual(Model.unescapeAvahi("plain"), "plain")
+})
+
+test("discoverCommand is avahi-browse under a timeout", () => {
+  const cmd = Model.discoverCommand()
+  assert.strictEqual(cmd[0], "timeout")
+  assert.ok(cmd.includes("avahi-browse"))
+  assert.ok(cmd.includes("_airplay._tcp"))
+})
+
 test("tooltip", () => {
   assert.strictEqual(Model.tooltip("LS50 Wireless II", "Standby"), "LS50 Wireless II — Standby")
   assert.strictEqual(Model.tooltip("", ""), "KEF Speaker")

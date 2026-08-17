@@ -28,8 +28,10 @@ omarchy plugin add https://github.com/melonamin/omarchy-kefir.git --enable
 omarchy bar set melonamin.kefir host <speaker-ip>
 ```
 
-Find the speaker's IP in the KEF Connect app, your router, or via
-`avahi-browse -rt _airplay._tcp` (KEF speakers advertise AirPlay).
+Or skip the second step: with no host configured, opening the panel scans
+the local network (mDNS via avahi) and lists the KEF speakers it finds —
+click one to adopt it. Setting the IP manually remains available for
+networks without mDNS.
 
 To remove:
 
@@ -42,9 +44,9 @@ other state.
 
 ## Dependencies
 
-Only `curl`, which Omarchy ships by default. The plugin talks HTTP to the
-speaker on your LAN and never contacts anything else. (`node` is used for the
-test suite only.)
+Only `curl` and `avahi-browse` (for discovery), both shipped with Omarchy by
+default. The plugin talks HTTP to the speaker on your LAN and never contacts
+anything else. (`node` is used for the test suite only.)
 
 ## IPC
 

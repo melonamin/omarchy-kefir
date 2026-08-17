@@ -157,6 +157,56 @@ function formatTime(ms) {
   return (h > 0 ? h + ":" : "") + mm + ":" + ss
 }
 
+// KEF speakers advertise AirPlay over mDNS with "manufacturer=KEF" in the
+// TXT record; avahi ships with Omarchy. The timeout wrapper guards against
+// avahi-browse hanging on a quiet interface.
+function discoverCommand() {
+  return ["timeout", "8", "avahi-browse", "-rpt", "_airplay._tcp"]
+}
+
+// avahi-browse -p escapes bytes in the instance name as \DDD (decimal).
+function unescapeAvahi(s) {
+  return String(s || "").replace(/\\(\d{3})/g, function(m, d) {
+    return String.fromCharCode(parseInt(d, 10))
+  })
+}
+
+// Resolved ("=;") avahi-browse lines -> [{name, model, address, hostname}]
+// for KEF devices only. IPv4 addresses win; IPv6-only hosts are kept as a
+// fallback. Fields: =;iface;proto;name;type;domain;hostname;address;port;txt...
+function parseDiscovery(raw) {
+  var v4 = [], v6 = [], seen = {}
+  var lines = String(raw || "").split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].indexOf("=;") !== 0) continue
+    var parts = lines[i].split(";")
+    if (parts.length < 10) continue
+    var txt = parts.slice(9).join(";")
+    if (txt.indexOf('"manufacturer=KEF"') === -1) continue
+    var modelMatch = txt.match(/"model=([^"]*)"/)
+    var entry = {
+      name: unescapeAvahi(parts[3]),
+      model: modelMatch ? modelMatch[1] : "",
+      address: parts[7],
+      hostname: parts[6]
+    }
+    if (parts[2] === "IPv4") v4.push(entry)
+    else v6.push(entry)
+  }
+  var out = []
+  for (var j = 0; j < v4.length; j++) {
+    if (seen[v4[j].hostname]) continue
+    seen[v4[j].hostname] = true
+    out.push(v4[j])
+  }
+  for (var k = 0; k < v6.length; k++) {
+    if (seen[v6[k].hostname]) continue
+    seen[v6[k].hostname] = true
+    out.push(v6[k])
+  }
+  return out
+}
+
 function speakerIcon(configured, reachable, powered, muted) {
   if (!configured || !reachable || !powered) return "󰓄"
   return muted ? "󰝟" : "󰓃"
@@ -192,6 +242,9 @@ if (typeof module !== "undefined") {
     controlPayload: controlPayload,
     parsePoll: parsePoll,
     formatTime: formatTime,
+    discoverCommand: discoverCommand,
+    unescapeAvahi: unescapeAvahi,
+    parseDiscovery: parseDiscovery,
     speakerIcon: speakerIcon,
     statusLine: statusLine,
     tooltip: tooltip

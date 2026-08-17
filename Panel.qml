@@ -20,8 +20,15 @@ Panel {
   readonly property var barIdentity: hostWidget || root
 
   // ---- Speaker state ----
-  readonly property string host: String(setting("host", "")).trim()
+  // hostOverride bridges the gap between adopting a discovered speaker and
+  // `omarchy bar set` round-tripping the value through shell.json.
+  property string hostOverride: ""
+  readonly property string host: hostOverride !== "" ? hostOverride : String(setting("host", "")).trim()
   readonly property bool configured: host !== ""
+
+  // ---- Discovery (mDNS/avahi) ----
+  property var discoveredSpeakers: []
+  property bool discovering: false
   property bool reachable: false
   property int volume: 0
   property bool mutedFlag: false
@@ -210,12 +217,39 @@ Panel {
     if (canPause) transport("pause")
   }
 
+  function startDiscovery() {
+    if (discovering || discoverProc.running) return
+    discovering = true
+    discoveredSpeakers = []
+    discoverProc.running = true
+  }
+
+  function adoptSpeaker(address) {
+    hostOverride = String(address)
+    if (bar) bar.run("omarchy bar set melonamin.kefir host " + bar.shellQuote(hostOverride))
+    pollNow()
+  }
+
+  onOpenedChanged: if (opened && !configured) startDiscovery()
+
   function showVolumeOsd() {
     if (!bar || !bar.shell) return
     bar.shell.summon("omarchy.osd", JSON.stringify({
       icon: root.barIcon,
       value: root.volume
     }))
+  }
+
+  Process {
+    id: discoverProc
+    command: Model.discoverCommand()
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root.discoveredSpeakers = Model.parseDiscovery(text)
+        root.discovering = false
+      }
+    }
   }
 
   Process {
@@ -384,15 +418,98 @@ Panel {
           }
         }
 
-        // ---- Unconfigured hint ----
-        Text {
+        // ---- Unconfigured: discover speakers on the network ----
+        Column {
           visible: !root.configured
           width: parent.width
-          text: "Set the speaker IP to get started:\n\nomarchy bar set melonamin.kefir host <ip>"
-          color: Qt.darker(root.bar.foreground, 1.2)
-          font.family: root.bar.fontFamily
-          font.pixelSize: Style.font.body
-          wrapMode: Text.Wrap
+          spacing: Style.space(8)
+
+          PanelSectionHeader {
+            text: "SPEAKERS ON THIS NETWORK"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+          }
+
+          Text {
+            visible: root.discovering
+            width: parent.width
+            text: "Scanning…"
+            color: Qt.darker(root.bar.foreground, 1.3)
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.body
+          }
+
+          Repeater {
+            model: root.discoveredSpeakers
+
+            CursorSurface {
+              id: speakerRow
+              required property var modelData
+
+              width: panelColumn.width
+              bordered: true
+              foreground: root.bar.foreground
+              implicitHeight: speakerRowInner.implicitHeight + Style.spacing.xl
+
+              Column {
+                id: speakerRowInner
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Style.space(10)
+                anchors.rightMargin: Style.space(10)
+                spacing: Style.space(2)
+
+                Text {
+                  text: speakerRow.modelData.name
+                  color: root.bar.foreground
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.body
+                  font.bold: true
+                  elide: Text.ElideRight
+                  width: parent.width
+                }
+
+                Text {
+                  text: [speakerRow.modelData.model, speakerRow.modelData.address]
+                    .filter(function(part) { return part !== "" }).join(" · ")
+                  color: Qt.darker(root.bar.foreground, 1.4)
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.caption
+                  elide: Text.ElideRight
+                  width: parent.width
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onContainsMouseChanged: speakerRow.hasCursor = containsMouse
+                onClicked: root.adoptSpeaker(speakerRow.modelData.address)
+              }
+            }
+          }
+
+          Text {
+            visible: !root.discovering && root.discoveredSpeakers.length === 0
+            width: parent.width
+            text: "No KEF speakers found.\nSet one manually:\nomarchy bar set melonamin.kefir host <ip>"
+            color: Qt.darker(root.bar.foreground, 1.3)
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.body
+            wrapMode: Text.Wrap
+          }
+
+          Button {
+            visible: !root.discovering
+            text: "Scan again"
+            iconText: "󰑐"
+            bordered: true
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            onClicked: root.startDiscovery()
+          }
         }
 
         // ---- Volume ----

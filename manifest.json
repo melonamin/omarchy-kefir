@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "melonamin.kefir",
   "name": "Kefir: KEF Speakers",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "melonamin",
   "description": "Control KEF wireless speakers: power, volume, source, and playback",
   "kinds": [

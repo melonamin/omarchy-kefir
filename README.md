@@ -31,6 +31,21 @@ omarchy bar set melonamin.kefir host <speaker-ip>
 Find the speaker's IP in the KEF Connect app, your router, or via
 `avahi-browse -rt _airplay._tcp` (KEF speakers advertise AirPlay).
 
+To remove:
+
+```bash
+omarchy plugin remove melonamin.kefir
+```
+
+Removal deletes the plugin checkout and its bar entry; the plugin stores no
+other state.
+
+## Dependencies
+
+Only `curl`, which Omarchy ships by default. The plugin talks HTTP to the
+speaker on your LAN and never contacts anything else. (`node` is used for the
+test suite only.)
+
 ## IPC
 
 For Hyprland keybindings:

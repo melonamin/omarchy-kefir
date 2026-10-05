@@ -102,7 +102,9 @@ Panel {
   }
 
   function setCenterHoverRevealSuppressed(value) {
-    if (root.bar && "centerHoverRevealSuppressed" in root.bar)
+    if (root.bar && typeof root.bar.setCenterHoverRevealSuppressed === "function")
+      root.bar.setCenterHoverRevealSuppressed(value)
+    else if (root.bar && "centerHoverRevealSuppressed" in root.bar)
       root.bar.centerHoverRevealSuppressed = value
   }
 
@@ -226,7 +228,7 @@ Panel {
 
   function adoptSpeaker(address) {
     hostOverride = String(address)
-    if (bar) bar.run("omarchy bar set melonamin.kefir host " + bar.shellQuote(hostOverride))
+    if (bar) bar.run("omarchy bar set melonamin.kefir host " + Util.shellQuote(hostOverride))
     pollNow()
   }
 
